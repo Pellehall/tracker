@@ -3,188 +3,199 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Daily Tracker</title>
+<title>Tracker</title>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #0f172a;
-    color: white;
-    margin: 0;
-    padding: 20px;
-  }
+body {
+  font-family: -apple-system, sans-serif;
+  background: #0f172a;
+  color: white;
+  padding: 16px;
+}
 
-  h1 {
-    text-align: center;
-  }
+h1 { text-align: center; }
 
-  .card {
-    background: #1e293b;
-    padding: 20px;
-    border-radius: 16px;
-    margin-bottom: 20px;
-  }
+.card {
+  background: #1e293b;
+  padding: 16px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
 
-  input {
-    width: 100%;
-    padding: 10px;
-    margin-top: 5px;
-    margin-bottom: 15px;
-    border-radius: 10px;
-    border: none;
-    font-size: 16px;
-  }
+select, input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  margin: 8px 0;
+}
 
-  button {
-    padding: 12px;
-    border: none;
-    border-radius: 12px;
-    margin: 5px 0;
-    width: 100%;
-    font-size: 16px;
-    cursor: pointer;
-  }
+button {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  margin-top: 8px;
+}
 
-  .primary {
-    background: #3b82f6;
-    color: white;
-  }
+.primary { background: #3b82f6; color: white; }
+.danger { background: #ef4444; color: white; }
 
-  .danger {
-    background: #ef4444;
-    color: white;
-  }
+.stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
 
-  .secondary {
-    background: #334155;
-    color: white;
-  }
-
-  .entry {
-    background: #1e293b;
-    padding: 15px;
-    border-radius: 12px;
-    margin-bottom: 10px;
-  }
-
-  .entry small {
-    color: #94a3b8;
-  }
+.entry {
+  background: #1e293b;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>📊 Daily Tracker</h1>
+<h1>🔥 Tracker</h1>
 
 <div class="card">
-  <label>Datum</label>
+  <div class="stats">
+    <div>🔥 Streak: <span id="streak">0</span></div>
+    <div>🏆 Level: <span id="level">1</span></div>
+  </div>
+
   <input type="date" id="date">
 
-  <label>Energi (1–10)</label>
-  <input type="number" id="energy" min="1" max="10">
+  <select id="energy">
+    <option value="">Energi</option>
+    <option value="2">Låg</option>
+    <option value="6">Normal</option>
+    <option value="10">Hög</option>
+  </select>
 
-  <label>Fokus (1–10)</label>
-  <input type="number" id="focus" min="1" max="10">
+  <select id="focus">
+    <option value="">Fokus</option>
+    <option value="2">Dålig</option>
+    <option value="6">OK</option>
+    <option value="10">Flow</option>
+  </select>
 
-  <label>Humör (1–10)</label>
-  <input type="number" id="mood" min="1" max="10">
+  <select id="mood">
+    <option value="">Humör</option>
+    <option value="2">Svängigt</option>
+    <option value="6">Neutral</option>
+    <option value="10">Stabil</option>
+  </select>
 
-  <button class="primary" onclick="saveEntry()">💾 Spara / Uppdatera</button>
-  <button class="secondary" onclick="exportExcel()">⬇️ Exportera Excel</button>
+  <button class="primary" onclick="saveEntry()">💾 Spara</button>
 </div>
 
 <div id="history"></div>
 
 <script>
-  const dateInput = document.getElementById("date");
-  dateInput.value = new Date().toISOString().split("T")[0];
+const dateEl = document.getElementById("date");
+dateEl.value = new Date().toISOString().split("T")[0];
 
-  function getData() {
-    return JSON.parse(localStorage.getItem("trackerData")) || [];
+function getData() {
+  return JSON.parse(localStorage.getItem("trackerData")) || [];
+}
+
+function saveData(data) {
+  localStorage.setItem("trackerData", JSON.stringify(data));
+}
+
+function calculateStats(data) {
+  let totalScore = 0;
+
+  data.forEach(d => {
+    totalScore += Number(d.energy) + Number(d.focus) + Number(d.mood);
+  });
+
+  const level = Math.floor(totalScore / 100) + 1;
+
+  // streak
+  let streak = 0;
+  let currentDate = new Date();
+
+  for (let i = 0; i < 365; i++) {
+    const dateStr = currentDate.toISOString().split("T")[0];
+    if (data.find(d => d.date === dateStr)) {
+      streak++;
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else break;
   }
 
-  function saveData(data) {
-    localStorage.setItem("trackerData", JSON.stringify(data));
+  return { level, streak };
+}
+
+function saveEntry() {
+  const entry = {
+    date: dateEl.value,
+    energy: energy.value,
+    focus: focus.value,
+    mood: mood.value
+  };
+
+  if (!entry.energy || !entry.focus || !entry.mood) {
+    alert("Fyll i allt");
+    return;
   }
 
-  function saveEntry() {
-    const date = document.getElementById("date").value;
-    const energy = document.getElementById("energy").value;
-    const focus = document.getElementById("focus").value;
-    const mood = document.getElementById("mood").value;
+  let data = getData();
+  const i = data.findIndex(d => d.date === entry.date);
 
-    if (!date || !energy || !focus || !mood) {
-      alert("Fyll i allt");
-      return;
-    }
+  if (i >= 0) data[i] = entry;
+  else data.push(entry);
 
-    let data = getData();
-    const index = data.findIndex(d => d.date === date);
-
-    const entry = { date, energy, focus, mood };
-
-    if (index >= 0) {
-      data[index] = entry;
-    } else {
-      data.push(entry);
-    }
-
-    saveData(data);
-    render();
-  }
-
-  function deleteEntry(date) {
-    let data = getData().filter(d => d.date !== date);
-    saveData(data);
-    render();
-  }
-
-  function editEntry(entry) {
-    document.getElementById("date").value = entry.date;
-    document.getElementById("energy").value = entry.energy;
-    document.getElementById("focus").value = entry.focus;
-    document.getElementById("mood").value = entry.mood;
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function render() {
-    const container = document.getElementById("history");
-    const data = getData().sort((a,b) => b.date.localeCompare(a.date));
-
-    container.innerHTML = "<h2>Historik</h2>";
-
-    data.forEach(entry => {
-      const div = document.createElement("div");
-      div.className = "entry";
-
-      div.innerHTML = `
-        <strong>${entry.date}</strong><br>
-        Energi: ${entry.energy} | Fokus: ${entry.focus} | Humör: ${entry.mood}<br>
-        <small>
-          <button onclick='editEntry(${JSON.stringify(entry)})'>✏️ Redigera</button>
-          <button class="danger" onclick="deleteEntry('${entry.date}')">🗑️ Ta bort</button>
-        </small>
-      `;
-
-      container.appendChild(div);
-    });
-  }
-
-  function exportExcel() {
-    const data = getData();
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Tracker");
-
-    XLSX.writeFile(wb, "tracker.xlsx");
-  }
-
+  saveData(data);
   render();
+}
+
+function deleteEntry(date) {
+  saveData(getData().filter(d => d.date !== date));
+  render();
+}
+
+function editEntry(e) {
+  dateEl.value = e.date;
+  energy.value = e.energy;
+  focus.value = e.focus;
+  mood.value = e.mood;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function render() {
+  const data = getData().sort((a,b)=>b.date.localeCompare(a.date));
+  const stats = calculateStats(data);
+
+  document.getElementById("streak").innerText = stats.streak;
+  document.getElementById("level").innerText = stats.level;
+
+  const container = document.getElementById("history");
+  container.innerHTML = "";
+
+  data.forEach(e => {
+    const score = Number(e.energy)+Number(e.focus)+Number(e.mood);
+
+    const div = document.createElement("div");
+    div.className = "entry";
+
+    div.innerHTML = `
+      <strong>${e.date}</strong> — ⭐ ${score}<br>
+      ⚡ ${e.energy} | 🎯 ${e.focus} | 😊 ${e.mood}<br>
+      <button onclick='editEntry(${JSON.stringify(e)})'>✏️</button>
+      <button class="danger" onclick="deleteEntry('${e.date}')">🗑️</button>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+render();
 </script>
 
 </body>
