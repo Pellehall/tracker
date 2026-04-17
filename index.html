@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tracker</title>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -24,30 +25,20 @@ h1 { text-align: center; }
   margin-bottom: 16px;
 }
 
-select, input {
+input[type="range"] {
   width: 100%;
-  padding: 12px;
-  border-radius: 10px;
-  border: none;
-  margin: 8px 0;
 }
 
 button {
   width: 100%;
   padding: 14px;
-  border: none;
   border-radius: 12px;
+  border: none;
   margin-top: 8px;
 }
 
 .primary { background: #3b82f6; color: white; }
 .danger { background: #ef4444; color: white; }
-
-.stats {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
 
 .entry {
   background: #1e293b;
@@ -60,38 +51,26 @@ button {
 
 <body>
 
-<h1>🔥 Tracker</h1>
+<h1>📊 Tracker</h1>
 
 <div class="card">
-  <div class="stats">
-    <div>🔥 Streak: <span id="streak">0</span></div>
-    <div>🏆 Level: <span id="level">1</span></div>
-  </div>
-
   <input type="date" id="date">
 
-  <select id="energy">
-    <option value="">Energi</option>
-    <option value="2">Låg</option>
-    <option value="6">Normal</option>
-    <option value="10">Hög</option>
-  </select>
+  <label>Energi: <span id="energyVal">5</span></label>
+  <input type="range" id="energy" min="1" max="10" value="5">
 
-  <select id="focus">
-    <option value="">Fokus</option>
-    <option value="2">Dålig</option>
-    <option value="6">OK</option>
-    <option value="10">Flow</option>
-  </select>
+  <label>Fokus: <span id="focusVal">5</span></label>
+  <input type="range" id="focus" min="1" max="10" value="5">
 
-  <select id="mood">
-    <option value="">Humör</option>
-    <option value="2">Svängigt</option>
-    <option value="6">Neutral</option>
-    <option value="10">Stabil</option>
-  </select>
+  <label>Humör: <span id="moodVal">5</span></label>
+  <input type="range" id="mood" min="1" max="10" value="5">
 
   <button class="primary" onclick="saveEntry()">💾 Spara</button>
+  <button onclick="exportExcel()">⬇️ Excel</button>
+</div>
+
+<div class="card">
+  <canvas id="chart"></canvas>
 </div>
 
 <div id="history"></div>
@@ -99,6 +78,14 @@ button {
 <script>
 const dateEl = document.getElementById("date");
 dateEl.value = new Date().toISOString().split("T")[0];
+
+const energy = document.getElementById("energy");
+const focus = document.getElementById("focus");
+const mood = document.getElementById("mood");
+
+energy.oninput = () => energyVal.innerText = energy.value;
+focus.oninput = () => focusVal.innerText = focus.value;
+mood.oninput = () => moodVal.innerText = mood.value;
 
 function getData() {
   return JSON.parse(localStorage.getItem("trackerData")) || [];
@@ -108,30 +95,6 @@ function saveData(data) {
   localStorage.setItem("trackerData", JSON.stringify(data));
 }
 
-function calculateStats(data) {
-  let totalScore = 0;
-
-  data.forEach(d => {
-    totalScore += Number(d.energy) + Number(d.focus) + Number(d.mood);
-  });
-
-  const level = Math.floor(totalScore / 100) + 1;
-
-  // streak
-  let streak = 0;
-  let currentDate = new Date();
-
-  for (let i = 0; i < 365; i++) {
-    const dateStr = currentDate.toISOString().split("T")[0];
-    if (data.find(d => d.date === dateStr)) {
-      streak++;
-      currentDate.setDate(currentDate.getDate() - 1);
-    } else break;
-  }
-
-  return { level, streak };
-}
-
 function saveEntry() {
   const entry = {
     date: dateEl.value,
@@ -139,11 +102,6 @@ function saveEntry() {
     focus: focus.value,
     mood: mood.value
   };
-
-  if (!entry.energy || !entry.focus || !entry.mood) {
-    alert("Fyll i allt");
-    return;
-  }
 
   let data = getData();
   const i = data.findIndex(d => d.date === entry.date);
@@ -165,20 +123,56 @@ function editEntry(e) {
   energy.value = e.energy;
   focus.value = e.focus;
   mood.value = e.mood;
+
+  energyVal.innerText = e.energy;
+  focusVal.innerText = e.focus;
+  moodVal.innerText = e.mood;
+
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function render() {
-  const data = getData().sort((a,b)=>b.date.localeCompare(a.date));
-  const stats = calculateStats(data);
+function exportExcel() {
+  const data = getData();
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+  XLSX.writeFile(wb, "tracker.xlsx");
+}
 
-  document.getElementById("streak").innerText = stats.streak;
-  document.getElementById("level").innerText = stats.level;
+let chart;
+
+function renderChart(data) {
+  const ctx = document.getElementById("chart");
+
+  const labels = data.map(d => d.date);
+  const energyData = data.map(d => d.energy);
+  const focusData = data.map(d => d.focus);
+  const moodData = data.map(d => d.mood);
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "Energi", data: energyData },
+        { label: "Fokus", data: focusData },
+        { label: "Humör", data: moodData }
+      ]
+    }
+  });
+}
+
+function render() {
+  const data = getData().sort((a,b)=>a.date.localeCompare(b.date));
+
+  renderChart(data);
 
   const container = document.getElementById("history");
-  container.innerHTML = "";
+  container.innerHTML = "<h3>Historik</h3>";
 
-  data.forEach(e => {
+  data.slice().reverse().forEach(e => {
     const score = Number(e.energy)+Number(e.focus)+Number(e.mood);
 
     const div = document.createElement("div");
