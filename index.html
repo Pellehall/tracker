@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+  <h2>Daglig Tracker</h2>
+
+  <label>Energi (1–10)</label><br>
+  <input type="number" id="energy" min="1" max="10"><br><br>
+
+  <label>Fokus (1–10)</label><br>
+  <input type="number" id="focus" min="1" max="10"><br><br>
+
+  <label>Humör (1–10)</label><br>
+  <input type="number" id="mood" min="1" max="10"><br><br>
+
+  <button onclick="saveEntry()">Spara</button>
+  <button onclick="exportExcel()">Exportera till Excel</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script>
+    function getData() {
+      return JSON.parse(localStorage.getItem("trackerData")) || [];
+    }
+
+    function saveEntry() {
+      const energy = document.getElementById("energy").value;
+      const focus = document.getElementById("focus").value;
+      const mood = document.getElementById("mood").value;
+
+      if (!energy || !focus || !mood) {
+        alert("Fyll i alla värden");
+        return;
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+
+      let data = getData();
+
+      // Uppdatera om dagens entry redan finns
+      const existingIndex = data.findIndex(d => d.date === today);
+
+      const entry = { date: today, energy, focus, mood };
+
+      if (existingIndex >= 0) {
+        data[existingIndex] = entry;
+      } else {
+        data.push(entry);
+      }
+
+      localStorage.setItem("trackerData", JSON.stringify(data));
+
+      alert("Sparat!");
+    }
+
+    function exportExcel() {
+      const data = getData();
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+
+      XLSX.writeFile(wb, "tracker.xlsx");
+    }
+  </script>
+</body>
+</html>
