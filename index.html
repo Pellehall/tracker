@@ -1,70 +1,191 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-  <meta charset="UTF-8">
-  <title>Daily Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Tracker</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0f172a;
+    color: white;
+    margin: 0;
+    padding: 20px;
+  }
+
+  h1 {
+    text-align: center;
+  }
+
+  .card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+
+  input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    margin-bottom: 15px;
+    border-radius: 10px;
+    border: none;
+    font-size: 16px;
+  }
+
+  button {
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    margin: 5px 0;
+    width: 100%;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .primary {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .danger {
+    background: #ef4444;
+    color: white;
+  }
+
+  .secondary {
+    background: #334155;
+    color: white;
+  }
+
+  .entry {
+    background: #1e293b;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+  }
+
+  .entry small {
+    color: #94a3b8;
+  }
+</style>
 </head>
+
 <body>
-  <h2>Daglig Tracker</h2>
 
-  <label>Energi (1–10)</label><br>
-  <input type="number" id="energy" min="1" max="10"><br><br>
+<h1>📊 Daily Tracker</h1>
 
-  <label>Fokus (1–10)</label><br>
-  <input type="number" id="focus" min="1" max="10"><br><br>
+<div class="card">
+  <label>Datum</label>
+  <input type="date" id="date">
 
-  <label>Humör (1–10)</label><br>
-  <input type="number" id="mood" min="1" max="10"><br><br>
+  <label>Energi (1–10)</label>
+  <input type="number" id="energy" min="1" max="10">
 
-  <button onclick="saveEntry()">Spara</button>
-  <button onclick="exportExcel()">Exportera till Excel</button>
+  <label>Fokus (1–10)</label>
+  <input type="number" id="focus" min="1" max="10">
 
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-  <script>
-    function getData() {
-      return JSON.parse(localStorage.getItem("trackerData")) || [];
+  <label>Humör (1–10)</label>
+  <input type="number" id="mood" min="1" max="10">
+
+  <button class="primary" onclick="saveEntry()">💾 Spara / Uppdatera</button>
+  <button class="secondary" onclick="exportExcel()">⬇️ Exportera Excel</button>
+</div>
+
+<div id="history"></div>
+
+<script>
+  const dateInput = document.getElementById("date");
+  dateInput.value = new Date().toISOString().split("T")[0];
+
+  function getData() {
+    return JSON.parse(localStorage.getItem("trackerData")) || [];
+  }
+
+  function saveData(data) {
+    localStorage.setItem("trackerData", JSON.stringify(data));
+  }
+
+  function saveEntry() {
+    const date = document.getElementById("date").value;
+    const energy = document.getElementById("energy").value;
+    const focus = document.getElementById("focus").value;
+    const mood = document.getElementById("mood").value;
+
+    if (!date || !energy || !focus || !mood) {
+      alert("Fyll i allt");
+      return;
     }
 
-    function saveEntry() {
-      const energy = document.getElementById("energy").value;
-      const focus = document.getElementById("focus").value;
-      const mood = document.getElementById("mood").value;
+    let data = getData();
+    const index = data.findIndex(d => d.date === date);
 
-      if (!energy || !focus || !mood) {
-        alert("Fyll i alla värden");
-        return;
-      }
+    const entry = { date, energy, focus, mood };
 
-      const today = new Date().toISOString().split("T")[0];
-
-      let data = getData();
-
-      // Uppdatera om dagens entry redan finns
-      const existingIndex = data.findIndex(d => d.date === today);
-
-      const entry = { date: today, energy, focus, mood };
-
-      if (existingIndex >= 0) {
-        data[existingIndex] = entry;
-      } else {
-        data.push(entry);
-      }
-
-      localStorage.setItem("trackerData", JSON.stringify(data));
-
-      alert("Sparat!");
+    if (index >= 0) {
+      data[index] = entry;
+    } else {
+      data.push(entry);
     }
 
-    function exportExcel() {
-      const data = getData();
+    saveData(data);
+    render();
+  }
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+  function deleteEntry(date) {
+    let data = getData().filter(d => d.date !== date);
+    saveData(data);
+    render();
+  }
 
-      XLSX.writeFile(wb, "tracker.xlsx");
-    }
-  </script>
+  function editEntry(entry) {
+    document.getElementById("date").value = entry.date;
+    document.getElementById("energy").value = entry.energy;
+    document.getElementById("focus").value = entry.focus;
+    document.getElementById("mood").value = entry.mood;
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function render() {
+    const container = document.getElementById("history");
+    const data = getData().sort((a,b) => b.date.localeCompare(a.date));
+
+    container.innerHTML = "<h2>Historik</h2>";
+
+    data.forEach(entry => {
+      const div = document.createElement("div");
+      div.className = "entry";
+
+      div.innerHTML = `
+        <strong>${entry.date}</strong><br>
+        Energi: ${entry.energy} | Fokus: ${entry.focus} | Humör: ${entry.mood}<br>
+        <small>
+          <button onclick='editEntry(${JSON.stringify(entry)})'>✏️ Redigera</button>
+          <button class="danger" onclick="deleteEntry('${entry.date}')">🗑️ Ta bort</button>
+        </small>
+      `;
+
+      container.appendChild(div);
+    });
+  }
+
+  function exportExcel() {
+    const data = getData();
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+
+    XLSX.writeFile(wb, "tracker.xlsx");
+  }
+
+  render();
+</script>
+
 </body>
 </html>
