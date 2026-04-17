@@ -16,8 +16,6 @@ body {
   padding: 16px;
 }
 
-h1 { text-align: center; }
-
 .card {
   background: #1e293b;
   padding: 16px;
@@ -25,8 +23,8 @@ h1 { text-align: center; }
   margin-bottom: 16px;
 }
 
-input[type="range"] {
-  width: 100%;
+.highlight {
+  border: 2px solid gold;
 }
 
 button {
@@ -37,8 +35,8 @@ button {
   margin-top: 8px;
 }
 
-.primary { background: #3b82f6; color: white; }
-.danger { background: #ef4444; color: white; }
+.primary { background: #3b82f6; }
+.danger { background: #ef4444; }
 
 .entry {
   background: #1e293b;
@@ -51,7 +49,7 @@ button {
 
 <body>
 
-<h1>📊 Tracker</h1>
+<h2>📊 Tracker</h2>
 
 <div class="card">
   <input type="date" id="date">
@@ -72,6 +70,8 @@ button {
 <div class="card">
   <canvas id="chart"></canvas>
 </div>
+
+<div class="card" id="insights"></div>
 
 <div id="history"></div>
 
@@ -98,9 +98,9 @@ function saveData(data) {
 function saveEntry() {
   const entry = {
     date: dateEl.value,
-    energy: energy.value,
-    focus: focus.value,
-    mood: mood.value
+    energy: Number(energy.value),
+    focus: Number(focus.value),
+    mood: Number(mood.value)
   };
 
   let data = getData();
@@ -139,6 +139,40 @@ function exportExcel() {
   XLSX.writeFile(wb, "tracker.xlsx");
 }
 
+// 📈 Moving average (trend)
+function movingAvg(arr, window=3) {
+  return arr.map((_, i) => {
+    const start = Math.max(0, i - window + 1);
+    const subset = arr.slice(start, i + 1);
+    return subset.reduce((a,b)=>a+b,0) / subset.length;
+  });
+}
+
+// 🧠 Insights
+function generateInsights(data) {
+  if (data.length < 3) return "Logga några dagar först 👇";
+
+  let highEnergy = data.filter(d => d.energy > 7);
+  let lowEnergy = data.filter(d => d.energy <= 7);
+
+  let avgFocusHigh = highEnergy.reduce((a,b)=>a+b.focus,0) / (highEnergy.length||1);
+  let avgFocusLow = lowEnergy.reduce((a,b)=>a+b.focus,0) / (lowEnergy.length||1);
+
+  let text = "";
+
+  if (avgFocusHigh > avgFocusLow) {
+    text += "👉 Du har högre fokus när energi > 7<br>";
+  }
+
+  const best = data.reduce((a,b)=>
+    (a.energy+a.focus+a.mood) > (b.energy+b.focus+b.mood) ? a : b
+  );
+
+  text += `🌟 Bästa dag: ${best.date}`;
+
+  return text;
+}
+
 let chart;
 
 function renderChart(data) {
@@ -149,6 +183,10 @@ function renderChart(data) {
   const focusData = data.map(d => d.focus);
   const moodData = data.map(d => d.mood);
 
+  const energyTrend = movingAvg(energyData);
+  const focusTrend = movingAvg(focusData);
+  const moodTrend = movingAvg(moodData);
+
   if (chart) chart.destroy();
 
   chart = new Chart(ctx, {
@@ -157,8 +195,11 @@ function renderChart(data) {
       labels,
       datasets: [
         { label: "Energi", data: energyData },
+        { label: "Energi trend", data: energyTrend, borderDash:[5,5] },
         { label: "Fokus", data: focusData },
-        { label: "Humör", data: moodData }
+        { label: "Fokus trend", data: focusTrend, borderDash:[5,5] },
+        { label: "Humör", data: moodData },
+        { label: "Humör trend", data: moodTrend, borderDash:[5,5] }
       ]
     }
   });
@@ -169,14 +210,22 @@ function render() {
 
   renderChart(data);
 
+  document.getElementById("insights").innerHTML = generateInsights(data);
+
+  const best = data.reduce((a,b)=>
+    (a.energy+a.focus+a.mood) > (b.energy+b.focus+b.mood) ? a : b
+  , data[0]);
+
   const container = document.getElementById("history");
   container.innerHTML = "<h3>Historik</h3>";
 
   data.slice().reverse().forEach(e => {
-    const score = Number(e.energy)+Number(e.focus)+Number(e.mood);
+    const score = e.energy + e.focus + e.mood;
 
     const div = document.createElement("div");
     div.className = "entry";
+
+    if (best && e.date === best.date) div.classList.add("highlight");
 
     div.innerHTML = `
       <strong>${e.date}</strong> — ⭐ ${score}<br>
