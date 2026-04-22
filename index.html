@@ -25,20 +25,18 @@ h1 { text-align: center; }
   margin-bottom: 16px;
 }
 
-input[type="range"] {
-  width: 100%;
-}
+input[type="range"] { width: 100%; }
 
 button {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
+  padding: 12px;
+  border-radius: 10px;
   border: none;
-  margin-top: 8px;
   cursor: pointer;
 }
 
-.primary { background: #3b82f6; color: white; }
+button:hover { opacity: 0.9; }
+
+.primary { background: #3b82f6; color: white; width: 100%; margin-top: 8px; }
 .danger { background: #ef4444; color: white; }
 
 .entry {
@@ -48,7 +46,37 @@ button {
   margin-bottom: 10px;
 }
 
-small { opacity: 0.7; }
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.row button {
+  flex: 1;
+  background: #334155;
+  color: white;
+}
+
+/* TOAST */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 12px;
+  opacity: 0;
+  transition: 0.3s;
+  pointer-events: none;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-10px);
+}
 </style>
 </head>
 
@@ -57,7 +85,14 @@ small { opacity: 0.7; }
 <h1>📊 Tracker</h1>
 
 <div class="card">
-  <input type="date" id="date">
+
+  <div class="row">
+    <button id="prevDay">⬅️</button>
+
+    <input type="date" id="date" style="flex:2;">
+
+    <button id="nextDay">➡️</button>
+  </div>
 
   <label>Energi: <span id="energyVal">5</span></label>
   <input type="range" id="energy" min="1" max="10" value="5">
@@ -78,6 +113,8 @@ small { opacity: 0.7; }
 
 <div id="history"></div>
 
+<div id="toast"></div>
+
 <script>
 const dateEl = document.getElementById("date");
 const energy = document.getElementById("energy");
@@ -88,17 +125,30 @@ const energyVal = document.getElementById("energyVal");
 const focusVal = document.getElementById("focusVal");
 const moodVal = document.getElementById("moodVal");
 
-const saveBtn = document.getElementById("saveBtn");
-const exportBtn = document.getElementById("exportBtn");
+const toast = document.getElementById("toast");
 
 dateEl.value = new Date().toISOString().split("T")[0];
 
-// slider updates
+// toast system
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2000);
+}
+
+// sliders
 energy.oninput = () => energyVal.innerText = energy.value;
 focus.oninput = () => focusVal.innerText = focus.value;
 mood.oninput = () => moodVal.innerText = mood.value;
 
-// storage safety
+// date helpers
+function changeDate(offset) {
+  const d = new Date(dateEl.value);
+  d.setDate(d.getDate() + offset);
+  dateEl.value = d.toISOString().split("T")[0];
+}
+
+// storage
 function getData() {
   try {
     return JSON.parse(localStorage.getItem("trackerData")) || [];
@@ -111,9 +161,8 @@ function saveData(data) {
   localStorage.setItem("trackerData", JSON.stringify(data));
 }
 
+// save
 function saveEntry() {
-  if (!dateEl.value) return alert("Välj datum");
-
   const entry = {
     date: dateEl.value,
     energy: Number(energy.value),
@@ -130,33 +179,57 @@ function saveEntry() {
   saveData(data);
   render();
 
-  alert("Sparat!");
+  showToast("Sparat ✅");
 }
 
+// delete/edit
 function deleteEntry(date) {
   saveData(getData().filter(d => d.date !== date));
   render();
+  showToast("Borttaget 🗑️");
 }
 
-function editEntry(entry) {
-  dateEl.value = entry.date;
-  energy.value = entry.energy;
-  focus.value = entry.focus;
-  mood.value = entry.mood;
+function editEntry(e) {
+  dateEl.value = e.date;
+  energy.value = e.energy;
+  focus.value = e.focus;
+  mood.value = e.mood;
 
-  energyVal.innerText = entry.energy;
-  focusVal.innerText = entry.focus;
-  moodVal.innerText = entry.mood;
+  energyVal.innerText = e.energy;
+  focusVal.innerText = e.focus;
+  moodVal.innerText = e.mood;
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+// excel (förbättrad)
 function exportExcel() {
-  const data = getData();
+  const raw = getData();
+
+  const data = raw.map(e => ({
+    Datum: e.date,
+    Energi: e.energy,
+    Fokus: e.focus,
+    Humör: e.mood,
+    Total: e.energy + e.focus + e.mood
+  }));
+
   const ws = XLSX.utils.json_to_sheet(data);
+
+  ws["!cols"] = [
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 8 },
+    { wch: 8 },
+    { wch: 8 }
+  ];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+
   XLSX.writeFile(wb, "tracker.xlsx");
+
+  showToast("Export klar 📊");
 }
 
 // chart
@@ -167,14 +240,12 @@ function renderChart(data) {
 
   const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  const labels = sorted.map(d => d.date);
-
   if (chart) chart.destroy();
 
   chart = new Chart(ctx, {
     type: "line",
     data: {
-      labels,
+      labels: sorted.map(d => d.date),
       datasets: [
         { label: "Energi", data: sorted.map(d => d.energy), borderColor: "#3b82f6" },
         { label: "Fokus", data: sorted.map(d => d.focus), borderColor: "#22c55e" },
@@ -183,17 +254,12 @@ function renderChart(data) {
     },
     options: {
       responsive: true,
-      scales: {
-        y: {
-          min: 0,
-          max: 10
-        }
-      }
+      scales: { y: { min: 0, max: 10 } }
     }
   });
 }
 
-// render UI
+// render
 function render() {
   const data = getData().sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -230,8 +296,16 @@ function render() {
 }
 
 // events
-saveBtn.addEventListener("click", saveEntry);
-exportBtn.addEventListener("click", exportExcel);
+document.getElementById("saveBtn").onclick = saveEntry;
+document.getElementById("exportBtn").onclick = exportExcel;
+
+document.getElementById("prevDay").onclick = () => {
+  changeDate(-1);
+};
+
+document.getElementById("nextDay").onclick = () => {
+  changeDate(1);
+};
 
 render();
 </script>
