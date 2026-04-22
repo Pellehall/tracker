@@ -16,6 +16,8 @@ body {
   padding: 16px;
 }
 
+h1 { text-align: center; }
+
 .card {
   background: #1e293b;
   padding: 16px;
@@ -23,8 +25,8 @@ body {
   margin-bottom: 16px;
 }
 
-.highlight {
-  border: 2px solid gold;
+input[type="range"] {
+  width: 100%;
 }
 
 button {
@@ -33,10 +35,11 @@ button {
   border-radius: 12px;
   border: none;
   margin-top: 8px;
+  cursor: pointer;
 }
 
-.primary { background: #3b82f6; }
-.danger { background: #ef4444; }
+.primary { background: #3b82f6; color: white; }
+.danger { background: #ef4444; color: white; }
 
 .entry {
   background: #1e293b;
@@ -44,12 +47,14 @@ button {
   border-radius: 12px;
   margin-bottom: 10px;
 }
+
+small { opacity: 0.7; }
 </style>
 </head>
 
 <body>
 
-<h2>📊 Tracker</h2>
+<h1>📊 Tracker</h1>
 
 <div class="card">
   <input type="date" id="date">
@@ -63,32 +68,43 @@ button {
   <label>Humör: <span id="moodVal">5</span></label>
   <input type="range" id="mood" min="1" max="10" value="5">
 
-  <button class="primary" onclick="saveEntry()">💾 Spara</button>
-  <button onclick="exportExcel()">⬇️ Excel</button>
+  <button class="primary" id="saveBtn">💾 Spara</button>
+  <button id="exportBtn">⬇️ Excel</button>
 </div>
 
 <div class="card">
   <canvas id="chart"></canvas>
 </div>
 
-<div class="card" id="insights"></div>
-
 <div id="history"></div>
 
 <script>
 const dateEl = document.getElementById("date");
-dateEl.value = new Date().toISOString().split("T")[0];
-
 const energy = document.getElementById("energy");
 const focus = document.getElementById("focus");
 const mood = document.getElementById("mood");
 
+const energyVal = document.getElementById("energyVal");
+const focusVal = document.getElementById("focusVal");
+const moodVal = document.getElementById("moodVal");
+
+const saveBtn = document.getElementById("saveBtn");
+const exportBtn = document.getElementById("exportBtn");
+
+dateEl.value = new Date().toISOString().split("T")[0];
+
+// slider updates
 energy.oninput = () => energyVal.innerText = energy.value;
 focus.oninput = () => focusVal.innerText = focus.value;
 mood.oninput = () => moodVal.innerText = mood.value;
 
+// storage safety
 function getData() {
-  return JSON.parse(localStorage.getItem("trackerData")) || [];
+  try {
+    return JSON.parse(localStorage.getItem("trackerData")) || [];
+  } catch {
+    return [];
+  }
 }
 
 function saveData(data) {
@@ -96,6 +112,8 @@ function saveData(data) {
 }
 
 function saveEntry() {
+  if (!dateEl.value) return alert("Välj datum");
+
   const entry = {
     date: dateEl.value,
     energy: Number(energy.value),
@@ -111,6 +129,8 @@ function saveEntry() {
 
   saveData(data);
   render();
+
+  alert("Sparat!");
 }
 
 function deleteEntry(date) {
@@ -118,15 +138,15 @@ function deleteEntry(date) {
   render();
 }
 
-function editEntry(e) {
-  dateEl.value = e.date;
-  energy.value = e.energy;
-  focus.value = e.focus;
-  mood.value = e.mood;
+function editEntry(entry) {
+  dateEl.value = entry.date;
+  energy.value = entry.energy;
+  focus.value = entry.focus;
+  mood.value = entry.mood;
 
-  energyVal.innerText = e.energy;
-  focusVal.innerText = e.focus;
-  moodVal.innerText = e.mood;
+  energyVal.innerText = entry.energy;
+  focusVal.innerText = entry.focus;
+  moodVal.innerText = entry.mood;
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -139,53 +159,15 @@ function exportExcel() {
   XLSX.writeFile(wb, "tracker.xlsx");
 }
 
-// 📈 Moving average (trend)
-function movingAvg(arr, window=3) {
-  return arr.map((_, i) => {
-    const start = Math.max(0, i - window + 1);
-    const subset = arr.slice(start, i + 1);
-    return subset.reduce((a,b)=>a+b,0) / subset.length;
-  });
-}
-
-// 🧠 Insights
-function generateInsights(data) {
-  if (data.length < 3) return "Logga några dagar först 👇";
-
-  let highEnergy = data.filter(d => d.energy > 7);
-  let lowEnergy = data.filter(d => d.energy <= 7);
-
-  let avgFocusHigh = highEnergy.reduce((a,b)=>a+b.focus,0) / (highEnergy.length||1);
-  let avgFocusLow = lowEnergy.reduce((a,b)=>a+b.focus,0) / (lowEnergy.length||1);
-
-  let text = "";
-
-  if (avgFocusHigh > avgFocusLow) {
-    text += "👉 Du har högre fokus när energi > 7<br>";
-  }
-
-  const best = data.reduce((a,b)=>
-    (a.energy+a.focus+a.mood) > (b.energy+b.focus+b.mood) ? a : b
-  );
-
-  text += `🌟 Bästa dag: ${best.date}`;
-
-  return text;
-}
-
+// chart
 let chart;
 
 function renderChart(data) {
   const ctx = document.getElementById("chart");
 
-  const labels = data.map(d => d.date);
-  const energyData = data.map(d => d.energy);
-  const focusData = data.map(d => d.focus);
-  const moodData = data.map(d => d.mood);
+  const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  const energyTrend = movingAvg(energyData);
-  const focusTrend = movingAvg(focusData);
-  const moodTrend = movingAvg(moodData);
+  const labels = sorted.map(d => d.date);
 
   if (chart) chart.destroy();
 
@@ -194,27 +176,28 @@ function renderChart(data) {
     data: {
       labels,
       datasets: [
-        { label: "Energi", data: energyData },
-        { label: "Energi trend", data: energyTrend, borderDash:[5,5] },
-        { label: "Fokus", data: focusData },
-        { label: "Fokus trend", data: focusTrend, borderDash:[5,5] },
-        { label: "Humör", data: moodData },
-        { label: "Humör trend", data: moodTrend, borderDash:[5,5] }
+        { label: "Energi", data: sorted.map(d => d.energy), borderColor: "#3b82f6" },
+        { label: "Fokus", data: sorted.map(d => d.focus), borderColor: "#22c55e" },
+        { label: "Humör", data: sorted.map(d => d.mood), borderColor: "#f59e0b" }
       ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          min: 0,
+          max: 10
+        }
+      }
     }
   });
 }
 
+// render UI
 function render() {
-  const data = getData().sort((a,b)=>a.date.localeCompare(b.date));
+  const data = getData().sort((a, b) => new Date(a.date) - new Date(b.date));
 
   renderChart(data);
-
-  document.getElementById("insights").innerHTML = generateInsights(data);
-
-  const best = data.reduce((a,b)=>
-    (a.energy+a.focus+a.mood) > (b.energy+b.focus+b.mood) ? a : b
-  , data[0]);
 
   const container = document.getElementById("history");
   container.innerHTML = "<h3>Historik</h3>";
@@ -225,18 +208,30 @@ function render() {
     const div = document.createElement("div");
     div.className = "entry";
 
-    if (best && e.date === best.date) div.classList.add("highlight");
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "✏️";
+    editBtn.onclick = () => editEntry(e);
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "🗑️";
+    delBtn.className = "danger";
+    delBtn.onclick = () => deleteEntry(e.date);
 
     div.innerHTML = `
       <strong>${e.date}</strong> — ⭐ ${score}<br>
-      ⚡ ${e.energy} | 🎯 ${e.focus} | 😊 ${e.mood}<br>
-      <button onclick='editEntry(${JSON.stringify(e)})'>✏️</button>
-      <button class="danger" onclick="deleteEntry('${e.date}')">🗑️</button>
+      ⚡ ${e.energy} | 🎯 ${e.focus} | 😊 ${e.mood}
     `;
+
+    div.appendChild(editBtn);
+    div.appendChild(delBtn);
 
     container.appendChild(div);
   });
 }
+
+// events
+saveBtn.addEventListener("click", saveEntry);
+exportBtn.addEventListener("click", exportExcel);
 
 render();
 </script>
