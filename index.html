@@ -3,276 +3,315 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tracker</title>
+<title>Snitt Tracker</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f172a">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.png">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
+* { box-sizing: border-box; }
+
 body {
+  margin: 0;
   font-family: -apple-system, sans-serif;
   background: #0f172a;
   color: white;
-  padding: 16px;
+  display: flex;
+  justify-content: center;
 }
 
-h1 { text-align: center; }
+.app {
+  width: 100%;
+  max-width: 520px;
+  padding: 14px;
+}
+
+h1 {
+  text-align: center;
+}
 
 .card {
   background: #1e293b;
-  padding: 16px;
+  padding: 14px;
   border-radius: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
-input[type="range"] { width: 100%; }
+.row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
 
-button {
+.row button {
+  flex: 1;
   padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: #334155;
+  color: white;
+  font-size: 16px;
+}
+
+.row input {
+  flex: 2;
+  padding: 10px;
   border-radius: 10px;
   border: none;
-  cursor: pointer;
+  font-size: 16px;
 }
 
-button:hover { opacity: 0.9; }
+label {
+  display: block;
+  margin-top: 10px;
+  font-size: 14px;
+  opacity: 0.9;
+}
 
-.primary { background: #3b82f6; color: white; width: 100%; margin-top: 8px; }
+input[type="range"] {
+  width: 100%;
+}
+
+button {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  margin-top: 10px;
+  font-size: 16px;
+}
+
+.primary { background: #3b82f6; color: white; }
 .danger { background: #ef4444; color: white; }
 
 .entry {
   background: #1e293b;
   padding: 12px;
   border-radius: 12px;
-  margin-bottom: 10px;
+  margin-top: 10px;
 }
 
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.row button {
-  flex: 1;
-  background: #334155;
-  color: white;
-}
-
-/* TOAST */
 #toast {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   background: #111827;
-  color: white;
-  padding: 12px 18px;
+  padding: 10px 14px;
   border-radius: 12px;
   opacity: 0;
-  transition: 0.3s;
-  pointer-events: none;
+  transition: 0.2s;
 }
+
 #toast.show {
   opacity: 1;
-  transform: translateX(-50%) translateY(-10px);
+  transform: translateX(-50%) translateY(-5px);
 }
 </style>
 </head>
 
 <body>
 
-<h1>📊 Tracker</h1>
+<div class="app">
+
+<h1>📊 Snitt Tracker</h1>
 
 <div class="card">
 
-  <div class="row">
-    <button id="prevDay">⬅️</button>
+<!-- 📅 DATE NAV -->
+<div class="row">
+  <button id="prev">⬅️</button>
+  <input type="date" id="date">
+  <button id="next">➡️</button>
+</div>
 
-    <input type="date" id="date" style="flex:2;">
+<label>Energi <span id="eVal">3</span></label>
+<input type="range" id="energy" min="1" max="5" value="3">
 
-    <button id="nextDay">➡️</button>
-  </div>
+<label>Fokus <span id="fVal">3</span></label>
+<input type="range" id="focus" min="1" max="5" value="3">
 
-  <label>Energi: <span id="energyVal">5</span></label>
-  <input type="range" id="energy" min="1" max="10" value="5">
+<label>Humör <span id="mVal">3</span></label>
+<input type="range" id="mood" min="1" max="5" value="3">
 
-  <label>Fokus: <span id="focusVal">5</span></label>
-  <input type="range" id="focus" min="1" max="10" value="5">
+<button class="primary" id="save">💾 Spara</button>
+<button id="export">⬇️ Excel</button>
+<button onclick="openCharts()">📊 Diagram</button>
 
-  <label>Humör: <span id="moodVal">5</span></label>
-  <input type="range" id="mood" min="1" max="10" value="5">
-
-  <button class="primary" id="saveBtn">💾 Spara</button>
-  <button id="exportBtn">⬇️ Excel</button>
 </div>
 
 <div class="card">
-  <canvas id="chart"></canvas>
+<canvas id="chart"></canvas>
 </div>
 
 <div id="history"></div>
 
+</div>
+
 <div id="toast"></div>
 
 <script>
+
 const dateEl = document.getElementById("date");
 const energy = document.getElementById("energy");
 const focus = document.getElementById("focus");
 const mood = document.getElementById("mood");
 
-const energyVal = document.getElementById("energyVal");
-const focusVal = document.getElementById("focusVal");
-const moodVal = document.getElementById("moodVal");
+const eVal = document.getElementById("eVal");
+const fVal = document.getElementById("fVal");
+const mVal = document.getElementById("mVal");
 
 const toast = document.getElementById("toast");
 
 dateEl.value = new Date().toISOString().split("T")[0];
 
-// toast system
-function showToast(msg) {
+// 🔔 toast
+function show(msg){
   toast.textContent = msg;
   toast.classList.add("show");
-  setTimeout(() => toast.classList.remove("show"), 2000);
+  setTimeout(()=>toast.classList.remove("show"),2000);
 }
 
 // sliders
-energy.oninput = () => energyVal.innerText = energy.value;
-focus.oninput = () => focusVal.innerText = focus.value;
-mood.oninput = () => moodVal.innerText = mood.value;
+energy.oninput = () => eVal.textContent = energy.value;
+focus.oninput = () => fVal.textContent = focus.value;
+mood.oninput = () => mVal.textContent = mood.value;
 
-// date helpers
-function changeDate(offset) {
+// storage
+const get = () => JSON.parse(localStorage.getItem("tracker") || "[]");
+const set = (d) => localStorage.setItem("tracker", JSON.stringify(d));
+
+// snitt
+function snitt(e){
+  return (e.energy + e.focus + e.mood) / 3;
+}
+
+// 📅 date navigation
+function moveDay(offset){
   const d = new Date(dateEl.value);
   d.setDate(d.getDate() + offset);
   dateEl.value = d.toISOString().split("T")[0];
 }
 
-// storage
-function getData() {
-  try {
-    return JSON.parse(localStorage.getItem("trackerData")) || [];
-  } catch {
-    return [];
-  }
-}
-
-function saveData(data) {
-  localStorage.setItem("trackerData", JSON.stringify(data));
-}
-
-// save
-function saveEntry() {
+// 💾 save + auto next day + reset
+function save(){
   const entry = {
     date: dateEl.value,
-    energy: Number(energy.value),
-    focus: Number(focus.value),
-    mood: Number(mood.value)
+    energy: +energy.value,
+    focus: +focus.value,
+    mood: +mood.value
   };
 
-  let data = getData();
+  const data = get();
   const i = data.findIndex(d => d.date === entry.date);
 
-  if (i >= 0) data[i] = entry;
-  else data.push(entry);
+  i >= 0 ? data[i] = entry : data.push(entry);
 
-  saveData(data);
+  set(data);
   render();
+  show("Sparat ✅");
 
-  showToast("Sparat ✅");
+  // 🔁 auto next day
+  const next = new Date(dateEl.value);
+  next.setDate(next.getDate() + 1);
+  dateEl.value = next.toISOString().split("T")[0];
+
+  // ♻️ reset sliders
+  energy.value = 3;
+  focus.value = 3;
+  mood.value = 3;
+
+  eVal.textContent = 3;
+  fVal.textContent = 3;
+  mVal.textContent = 3;
 }
 
-// delete/edit
-function deleteEntry(date) {
-  saveData(getData().filter(d => d.date !== date));
+// 🗑 delete
+function deleteEntry(date){
+  set(get().filter(d => d.date !== date));
   render();
-  showToast("Borttaget 🗑️");
+  show("Borttaget 🗑️");
 }
 
-function editEntry(e) {
+// ✏️ edit
+function editEntry(e){
   dateEl.value = e.date;
   energy.value = e.energy;
   focus.value = e.focus;
   mood.value = e.mood;
 
-  energyVal.innerText = e.energy;
-  focusVal.innerText = e.focus;
-  moodVal.innerText = e.mood;
+  eVal.textContent = e.energy;
+  fVal.textContent = e.focus;
+  mVal.textContent = e.mood;
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  show("Redigerar ✏️");
 }
 
-// excel (förbättrad)
-function exportExcel() {
-  const raw = getData();
-
-  const data = raw.map(e => ({
+// 📊 excel
+function exportExcel(){
+  const data = get().map(e => ({
     Datum: e.date,
     Energi: e.energy,
     Fokus: e.focus,
     Humör: e.mood,
-    Total: e.energy + e.focus + e.mood
+    Snitt: snitt(e).toFixed(2)
   }));
 
   const ws = XLSX.utils.json_to_sheet(data);
-
-  ws["!cols"] = [
-    { wch: 12 },
-    { wch: 8 },
-    { wch: 8 },
-    { wch: 8 },
-    { wch: 8 }
-  ];
-
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Tracker");
+  XLSX.utils.book_append_sheet(wb, ws, "Snitt");
+  XLSX.writeFile(wb, "snitt.xlsx");
 
-  XLSX.writeFile(wb, "tracker.xlsx");
-
-  showToast("Export klar 📊");
+  show("Export klar 📊");
 }
 
-// chart
+// 📊 chart
 let chart;
 
-function renderChart(data) {
-  const ctx = document.getElementById("chart");
+function draw(){
+  const data = get().sort((a,b)=>new Date(a.date)-new Date(b.date));
 
-  const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
+  if(chart) chart.destroy();
 
-  if (chart) chart.destroy();
-
-  chart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: sorted.map(d => d.date),
-      datasets: [
-        { label: "Energi", data: sorted.map(d => d.energy), borderColor: "#3b82f6" },
-        { label: "Fokus", data: sorted.map(d => d.focus), borderColor: "#22c55e" },
-        { label: "Humör", data: sorted.map(d => d.mood), borderColor: "#f59e0b" }
+  chart = new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{
+      labels:data.map(d=>d.date),
+      datasets:[
+        {label:"Energi",data:data.map(d=>d.energy),borderColor:"#3b82f6"},
+        {label:"Fokus",data:data.map(d=>d.focus),borderColor:"#22c55e"},
+        {label:"Humör",data:data.map(d=>d.mood),borderColor:"#f59e0b"}
       ]
     },
-    options: {
-      responsive: true,
-      scales: { y: { min: 0, max: 10 } }
-    }
+    options:{scales:{y:{min:1,max:5}}}
   });
 }
 
-// render
-function render() {
-  const data = getData().sort((a, b) => new Date(a.date) - new Date(b.date));
+// 📋 render
+function render(){
+  draw();
 
-  renderChart(data);
+  const h = document.getElementById("history");
+  const data = get().slice().reverse();
 
-  const container = document.getElementById("history");
-  container.innerHTML = "<h3>Historik</h3>";
+  h.innerHTML = "<h3>Historik</h3>";
 
-  data.slice().reverse().forEach(e => {
-    const score = e.energy + e.focus + e.mood;
-
+  data.forEach(e=>{
     const div = document.createElement("div");
     div.className = "entry";
+
+    div.innerHTML = `
+      <strong>${e.date}</strong><br>
+      ⚡ ${e.energy} | 🎯 ${e.focus} | 😊 ${e.mood}<br>
+      Snitt: ${snitt(e).toFixed(1)}
+    `;
 
     const editBtn = document.createElement("button");
     editBtn.textContent = "✏️";
@@ -283,31 +322,32 @@ function render() {
     delBtn.className = "danger";
     delBtn.onclick = () => deleteEntry(e.date);
 
-    div.innerHTML = `
-      <strong>${e.date}</strong> — ⭐ ${score}<br>
-      ⚡ ${e.energy} | 🎯 ${e.focus} | 😊 ${e.mood}
-    `;
-
     div.appendChild(editBtn);
     div.appendChild(delBtn);
 
-    container.appendChild(div);
+    h.appendChild(div);
   });
 }
 
+// 📊 open charts page
+function openCharts(){
+  window.location = "diagram.html";
+}
+
 // events
-document.getElementById("saveBtn").onclick = saveEntry;
-document.getElementById("exportBtn").onclick = exportExcel;
-
-document.getElementById("prevDay").onclick = () => {
-  changeDate(-1);
-};
-
-document.getElementById("nextDay").onclick = () => {
-  changeDate(1);
-};
+document.getElementById("save").onclick = save;
+document.getElementById("export").onclick = exportExcel;
+document.getElementById("prev").onclick = () => moveDay(-1);
+document.getElementById("next").onclick = () => moveDay(1);
 
 render();
+
+</script>
+
+<script>
+if("serviceWorker"in navigator){
+  navigator.serviceWorker.register("sw.js");
+}
 </script>
 
 </body>
