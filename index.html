@@ -33,9 +33,7 @@ body {
   padding: 14px;
 }
 
-h1 {
-  text-align: center;
-}
+h1 { text-align: center; }
 
 .card {
   background: #1e293b;
@@ -125,7 +123,6 @@ button {
 
 <div class="card">
 
-<!-- 📅 DATE NAV -->
 <div class="row">
   <button id="prev">⬅️</button>
   <input type="date" id="date">
@@ -138,8 +135,8 @@ button {
 <label>Fokus <span id="fVal">3</span></label>
 <input type="range" id="focus" min="1" max="5" value="3">
 
-<label>Humör <span id="mVal">3</span></label>
-<input type="range" id="mood" min="1" max="5" value="3">
+<label>Plan <span id="pVal">0</span></label>
+<input type="range" id="plan" min="0" max="1" step="1" value="0">
 
 <button class="primary" id="save">💾 Spara</button>
 <button id="export">⬇️ Excel</button>
@@ -162,17 +159,17 @@ button {
 const dateEl = document.getElementById("date");
 const energy = document.getElementById("energy");
 const focus = document.getElementById("focus");
-const mood = document.getElementById("mood");
+const plan = document.getElementById("plan");
 
 const eVal = document.getElementById("eVal");
 const fVal = document.getElementById("fVal");
-const mVal = document.getElementById("mVal");
+const pVal = document.getElementById("pVal");
 
 const toast = document.getElementById("toast");
 
 dateEl.value = new Date().toISOString().split("T")[0];
 
-// 🔔 toast
+// toast
 function show(msg){
   toast.textContent = msg;
   toast.classList.add("show");
@@ -182,31 +179,39 @@ function show(msg){
 // sliders
 energy.oninput = () => eVal.textContent = energy.value;
 focus.oninput = () => fVal.textContent = focus.value;
-mood.oninput = () => mVal.textContent = mood.value;
+plan.oninput = () => pVal.textContent = plan.value;
 
-// storage
-const get = () => JSON.parse(localStorage.getItem("tracker") || "[]");
+// storage (bakåtkompatibel)
+const get = () => {
+  const data = JSON.parse(localStorage.getItem("tracker") || "[]");
+
+  return data.map(e => ({
+    ...e,
+    plan: e.plan ?? e.mood ?? 0
+  }));
+};
+
 const set = (d) => localStorage.setItem("tracker", JSON.stringify(d));
 
 // snitt
 function snitt(e){
-  return (e.energy + e.focus + e.mood) / 3;
+  return (e.energy + e.focus + e.plan) / 3;
 }
 
-// 📅 date navigation
+// date nav
 function moveDay(offset){
   const d = new Date(dateEl.value);
   d.setDate(d.getDate() + offset);
   dateEl.value = d.toISOString().split("T")[0];
 }
 
-// 💾 save + auto next day + reset
+// save
 function save(){
   const entry = {
     date: dateEl.value,
     energy: +energy.value,
     focus: +focus.value,
-    mood: +mood.value
+    plan: +plan.value
   };
 
   const data = get();
@@ -218,49 +223,47 @@ function save(){
   render();
   show("Sparat ✅");
 
-  // 🔁 auto next day
   const next = new Date(dateEl.value);
   next.setDate(next.getDate() + 1);
   dateEl.value = next.toISOString().split("T")[0];
 
-  // ♻️ reset sliders
   energy.value = 3;
   focus.value = 3;
-  mood.value = 3;
+  plan.value = 0;
 
   eVal.textContent = 3;
   fVal.textContent = 3;
-  mVal.textContent = 3;
+  pVal.textContent = 0;
 }
 
-// 🗑 delete
+// delete
 function deleteEntry(date){
   set(get().filter(d => d.date !== date));
   render();
   show("Borttaget 🗑️");
 }
 
-// ✏️ edit
+// edit
 function editEntry(e){
   dateEl.value = e.date;
   energy.value = e.energy;
   focus.value = e.focus;
-  mood.value = e.mood;
+  plan.value = e.plan;
 
   eVal.textContent = e.energy;
   fVal.textContent = e.focus;
-  mVal.textContent = e.mood;
+  pVal.textContent = e.plan;
 
   show("Redigerar ✏️");
 }
 
-// 📊 excel
+// excel
 function exportExcel(){
   const data = get().map(e => ({
     Datum: e.date,
     Energi: e.energy,
     Fokus: e.focus,
-    Humör: e.mood,
+    Plan: e.plan,
     Snitt: snitt(e).toFixed(2)
   }));
 
@@ -272,7 +275,7 @@ function exportExcel(){
   show("Export klar 📊");
 }
 
-// 📊 chart
+// chart
 let chart;
 
 function draw(){
@@ -287,14 +290,14 @@ function draw(){
       datasets:[
         {label:"Energi",data:data.map(d=>d.energy),borderColor:"#3b82f6"},
         {label:"Fokus",data:data.map(d=>d.focus),borderColor:"#22c55e"},
-        {label:"Humör",data:data.map(d=>d.mood),borderColor:"#f59e0b"}
+        {label:"Plan",data:data.map(d=>d.plan),borderColor:"#f59e0b"}
       ]
     },
-    options:{scales:{y:{min:1,max:5}}}
+    options:{scales:{y:{min:0,max:5}}}
   });
 }
 
-// 📋 render
+// render
 function render(){
   draw();
 
@@ -309,7 +312,7 @@ function render(){
 
     div.innerHTML = `
       <strong>${e.date}</strong><br>
-      ⚡ ${e.energy} | 🎯 ${e.focus} | 😊 ${e.mood}<br>
+      ⚡ ${e.energy} | 🎯 ${e.focus} | 🧠 Plan: ${e.plan}<br>
       Snitt: ${snitt(e).toFixed(1)}
     `;
 
@@ -329,16 +332,15 @@ function render(){
   });
 }
 
-// 📊 open charts page
-function openCharts(){
-  window.location = "diagram.html";
-}
-
-// events
+// nav
 document.getElementById("save").onclick = save;
 document.getElementById("export").onclick = exportExcel;
 document.getElementById("prev").onclick = () => moveDay(-1);
 document.getElementById("next").onclick = () => moveDay(1);
+
+function openCharts(){
+  window.location = "diagram.html";
+}
 
 render();
 
