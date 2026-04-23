@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagram</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+margin:0;
+font-family:-apple-system;
+background:#0f172a;
+color:white;
+display:flex;
+justify-content:center;
+}
+
+.app{max-width:520px;width:100%;padding:14px;}
+
+.card{background:#1e293b;padding:14px;border-radius:16px;}
+
+button{
+width:100%;
+padding:12px;
+margin-top:10px;
+border:none;
+border-radius:12px;
+background:#3b82f6;
+color:white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<h2>📊 Diagram</h2>
+
+<div class="card">
+
+<button onclick="back()">⬅️ Tillbaka</button>
+<button onclick="exportPNG()">📷 PNG</button>
+
+</div>
+
+<div class="card">
+<canvas id="chart"></canvas>
+</div>
+
+</div>
+
+<script>
+
+const get=()=>JSON.parse(localStorage.getItem("tracker")||"[]");
+
+let chart;
+
+function render(){
+const data=get();
+
+if(chart)chart.destroy();
+
+chart=new Chart(document.getElementById("chart"),{
+type:"line",
+data:{
+labels:data.map(d=>d.date),
+datasets:[
+{label:"Energi",data:data.map(d=>d.energy),borderColor:"#3b82f6"},
+{label:"Fokus",data:data.map(d=>d.focus),borderColor:"#22c55e"},
+{label:"Humör",data:data.map(d=>d.mood),borderColor:"#f59e0b"}
+]
+}
+});
+}
+
+function exportPNG(){
+const a=document.createElement("a");
+a.download="diagram.png";
+a.href=document.getElementById("chart").toDataURL("image/png");
+a.click();
+}
+
+function back(){
+window.location="index.html";
+}
+
+render();
+
+</script>
+
+</body>
+</html>
